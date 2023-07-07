@@ -406,6 +406,7 @@ dependencies = [
  "eframe",
  "egui",
  "itertools",
+ "regex",
 ]
 
 [[package]]

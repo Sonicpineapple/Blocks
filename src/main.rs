@@ -1,3 +1,4 @@
+use cgmath::num_traits::ToPrimitive;
 use cgmath::prelude::*;
 use cgmath::vec3;
 use cgmath::Matrix3;
@@ -23,13 +24,13 @@ struct App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
         Self {
             world: World {
-                blocks: vec![Wireframe::block(vec3(-1., -1., 1.), vec3(1., 1., 1.))],
+                blocks: vec![
+                    Wireframe::block(vec3(-1., -1., 1.), vec3(1., 1., 1.), egui::Color32::GREEN),
+                    Wireframe::block(vec3(-2., 1., 1.), vec3(2., 2., 1.), egui::Color32::RED),
+                    Wireframe::block(vec3(1., 1., 2.), vec3(1., 2., 3.), egui::Color32::BLUE),
+                ],
                 camera: Camera {
                     pos: vec3(0., 0., 0.),
                     pitch: cgmath::Rad::zero(),
@@ -66,8 +67,61 @@ impl App {
                     let db = b.z - Camera::NEAR_PLANE;
                     a = (db * a - da * b) / (db - da);
                 }
-                ui.painter()
-                    .line_segment([to_screen(a), to_screen(b)], (2.0, egui::Color32::GREEN))
+
+                let mut a = to_screen(a);
+                let mut b = to_screen(b);
+
+                let xmin = self.view.rect.left();
+                let xmax = self.view.rect.right();
+                let ymin = self.view.rect.top();
+                let ymax = self.view.rect.bottom();
+
+                if b.x < a.x {
+                    std::mem::swap(&mut a, &mut b);
+                }
+                if b.x < xmin {
+                    continue;
+                }
+                if a.x < xmin {
+                    let da = a.x - xmin;
+                    let db = b.x - xmin;
+                    a = ((db * a.to_vec2() - da * b.to_vec2()) / (db - da)).to_pos2()
+                }
+                if b.x > a.x {
+                    std::mem::swap(&mut a, &mut b);
+                }
+                if b.x > xmax {
+                    continue;
+                }
+                if a.x > xmax {
+                    let da = a.x - xmax;
+                    let db = b.x - xmax;
+                    a = ((db * a.to_vec2() - da * b.to_vec2()) / (db - da)).to_pos2()
+                }
+                if b.y < a.y {
+                    std::mem::swap(&mut a, &mut b);
+                }
+                if b.y < ymin {
+                    continue;
+                }
+                if a.y < ymin {
+                    let da = a.y - ymin;
+                    let db = b.y - ymin;
+                    a = ((db * a.to_vec2() - da * b.to_vec2()) / (db - da)).to_pos2()
+                }
+                if b.y > a.y {
+                    std::mem::swap(&mut a, &mut b);
+                }
+                if b.y > ymax {
+                    continue;
+                }
+                if a.y > ymax {
+                    let da = a.y - ymax;
+                    let db = b.y - ymax;
+                    a = ((db * a.to_vec2() - da * b.to_vec2()) / (db - da)).to_pos2()
+                }
+
+                ui.painter().line_segment([a, b], (2.0, block.col))
             }
         }
     }
@@ -78,15 +132,20 @@ struct World {
     blocks: Vec<Wireframe>,
     camera: Camera,
 }
-impl World {}
+impl World {
+    fn add_block(&mut self, block: Wireframe) {
+        self.blocks.push(block);
+    }
+}
 
 #[derive(Debug, Clone)]
 struct Wireframe {
     verts: Vec<Vector3<f32>>,
     edges: Vec<[usize; 2]>,
+    col: egui::Color32,
 }
 impl Wireframe {
-    fn block(min: Vector3<f32>, size: Vector3<f32>) -> Self {
+    fn block(min: Vector3<f32>, size: Vector3<f32>, col: egui::Color32) -> Self {
         let a = min;
         let b = min + size;
         let verts = vec![
@@ -116,7 +175,7 @@ impl Wireframe {
             [0b110, 0b111],
             [0b110, 0b111],
         ];
-        Self { verts, edges }
+        Self { verts, edges, col }
     }
 }
 
@@ -157,6 +216,13 @@ struct Viewport {
     rect: egui::Rect,
 }
 impl Viewport {
+    fn new(full_rect: egui::Rect) -> Viewport {
+        let cen = full_rect.center();
+        let size = full_rect.size().min_elem() * 0.9;
+        Self {
+            rect: egui::Rect::from_center_size(cen, egui::vec2(1., 1.) * size),
+        }
+    }
     fn camera_to_screen(&self, cam_vec: egui::Vec2) -> egui::Pos2 {
         self.rect.center() + self.rect.size().min_elem() * cam_vec * egui::vec2(1., -1.) / 2.
     }
@@ -179,22 +245,22 @@ impl eframe::App for App {
         fn pressed(ctx: &egui::Context, key: egui::Key) -> bool {
             ctx.input(|input| input.key_down(key))
         }
-        if pressed(ctx, egui::Key::W) {
+        if pressed(ctx, egui::Key::E) {
             dpos += vec3(0., 0., 1.);
         }
-        if pressed(ctx, egui::Key::S) {
+        if pressed(ctx, egui::Key::D) {
             dpos += vec3(0., 0., -1.);
         }
-        if pressed(ctx, egui::Key::A) {
+        if pressed(ctx, egui::Key::S) {
             dpos += vec3(-1., 0., 0.);
         }
-        if pressed(ctx, egui::Key::D) {
+        if pressed(ctx, egui::Key::F) {
             dpos += vec3(1., 0., 0.);
         }
         if pressed(ctx, egui::Key::Space) {
             dpos += vec3(0., 1., 0.);
         }
-        if pressed(ctx, egui::Key::Tab) {
+        if pressed(ctx, egui::Key::A) {
             dpos += vec3(0., -1., 0.);
         }
 
@@ -227,9 +293,128 @@ impl eframe::App for App {
             ctx.request_repaint()
         }
 
+        egui::SidePanel::left("shape_panel").show(ctx, |ui| {
+            let paths = std::fs::read_dir(
+                "C:/Users/scare/OneDrive/Documents/Cubes and Puzzles/blocks/data/lib/reg3/",
+            )
+            .unwrap();
+            let _labels = paths
+                .filter_map(Result::ok)
+                .map(|path| {
+                    (
+                        egui::Label::new(path.file_name().to_str().unwrap())
+                            .sense(egui::Sense::click()),
+                        path,
+                    )
+                })
+                .for_each(|(label, path)| {
+                    if ui.add(label).clicked() {
+                        #[derive(Debug, Clone, PartialEq)]
+                        enum Value {
+                            Num(f32),
+                            List(Vec<Value>),
+                            Open,
+                            Edge((usize, usize)),
+                            Face(Vec<usize>),
+                        }
+                        impl Value {
+                            fn float(&self) -> f32 {
+                                if let Value::Num(v) = self {
+                                    *v
+                                } else {
+                                    panic!("Expected numeric value but got {self:?}")
+                                }
+                            }
+                        }
+
+                        let str = std::fs::read_to_string(path.path()).expect("Bad file");
+                        let rgx = regex::Regex::new(r"[\d\.-]+|\[|\]|[^\[\]\s]+").unwrap();
+                        let def = rgx.find_iter(&str);
+                        let mut stack: Vec<Value> = vec![];
+                        for token in def {
+                            match token.as_str() {
+                                "[" => stack.push(Value::Open),
+                                "]" => {
+                                    let i = stack
+                                        .iter()
+                                        .rposition(|v| *v == Value::Open)
+                                        .expect("Extra ] in file");
+                                    let v = Value::List(stack[(i + 1)..].to_vec());
+                                    stack = stack[..i].to_vec();
+                                    stack.push(v);
+                                }
+                                "edge" => {
+                                    if let (Value::Num(b), Value::Num(a)) =
+                                        (stack.pop().unwrap(), stack.pop().unwrap())
+                                    {
+                                        stack.push(Value::Edge((
+                                            a.to_usize().expect("Bad index when making edge"),
+                                            b.to_usize().expect("Bad index when making edge"),
+                                        )))
+                                    }
+                                }
+                                "face" => {
+                                    if let (Value::List(norm), Value::List(inds)) =
+                                        (stack.pop().unwrap(), stack.pop().unwrap())
+                                    {
+                                    }
+                                }
+                                "shape" => break,
+                                _ => {
+                                    if let Ok(x) = token.as_str().parse() {
+                                        stack.push(Value::Num(x))
+                                    }
+                                }
+                            }
+                        }
+                        let verts = if let Value::List(v) = &stack[0] {
+                            v.clone()
+                        } else {
+                            panic!()
+                        };
+                        let edges = if let Value::List(v) = &stack[1] {
+                            v.clone()
+                        } else {
+                            panic!()
+                        };
+
+                        let verts = verts
+                            .iter()
+                            .map(|v| {
+                                if let Value::List(v) = v {
+                                    vec3(v[0].float(), v[1].float(), v[2].float())
+                                } else {
+                                    panic!()
+                                }
+                            })
+                            .collect_vec();
+                        let edges = edges
+                            .iter()
+                            .map(|v| {
+                                if let Value::Edge((i, j)) = v {
+                                    [*i, *j]
+                                } else {
+                                    panic!()
+                                }
+                            })
+                            .collect_vec();
+
+                        let shape = Wireframe {
+                            verts,
+                            edges,
+                            col: egui::Color32::GOLD,
+                        };
+                        self.world.add_block(shape);
+
+                        // magic the path in
+                    }
+                });
+        });
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.view.rect = ui.available_rect_before_wrap();
+            self.view = Viewport::new(ui.available_rect_before_wrap());
             self.draw_world(ui);
+            ui.painter()
+                .rect_stroke(self.view.rect, 0., (2., egui::Color32::GRAY));
         });
     }
 }
